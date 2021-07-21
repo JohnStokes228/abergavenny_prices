@@ -4,6 +4,7 @@ analysis.
 """
 import re
 import pandas as pd
+import numpy as np
 from typing import Dict
 
 
@@ -82,6 +83,8 @@ def engineering_main() -> None:
     prices = pd.read_csv('data/monmouthshire_prices.csv')  # the second 'p'
 
     full_df = prices.merge(postcodes, on='postcode', how='outer')
+    full_df['has_price_data'] = np.where(full_df['price_paid'].notnull(), 1, 0)
+
     full_df.to_csv('data/monmouthshire_properties.csv', index=False)  # the third 'p'
 
 

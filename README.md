@@ -9,3 +9,11 @@ https://www.doogal.co.uk/BatchGeocoding.php <- for long lat values per postcode 
 
 need to find some peripheral datasets too to supplement these data i.e. distance from major conveniences / landmarks, number of bedrooms if possible, maybe even plot size for the house. hopefully we can do a combination of data vis and general dicking around here...
 
+current progress:
+    - brought those two datasets together
+    - setup initial analysis dashboard with basically 0 features
+Up next:
+    - further cleaning / feature engineering
+    - track down peripheral datasets
+    - add new graphs to dashboard
+
