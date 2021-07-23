@@ -3,9 +3,67 @@ Joining datasets together to form a single csv. Doing additional feature enginee
 analysis.
 """
 import re
+import hashlib
 import pandas as pd
 import numpy as np
-from typing import Dict
+from typing import Dict, Tuple
+
+
+def interpolate_price_paid(df: pd.DataFrame) -> pd.DataFrame:
+    """Interpolate the value of the property for years where it has none, rename columns ready for the join.
+
+    Notes
+    -----
+    So far as I can tell pandas' "interpolate" functionality will only be used to fill nans that fall between non-nan
+    elements. As such its important we dont create fake rows prior to this step. that said, if the point of
+    interpolating is to get a consistent time series then we'll need to forecast / backcast the prices for properties
+    who were first sold after 1995, or last sold prior to 2021.
+
+    Parameters
+    ----------
+    df : Data, including unique property_id and deed_date as datetime type.
+
+    Returns
+    -------
+    pd.DataFrame
+        Resampled data with a row per property per year and interpolated price values.
+    """
+    df = df[['property_id', 'deed_date', 'price_paid']]
+    df.set_index('deed_date', inplace=True)
+
+    df = df.groupby('property_id').resample('Y').mean()
+    df['price_paid'] = df['price_paid'].interpolate()
+
+    df.reset_index(inplace=True)
+    df['year'] = df['deed_date'].dt.to_period('Y')
+    df.drop('deed_date', inplace=True, axis=1)
+    df.rename(columns={'price_paid': 'interpolated_price'}, inplace=True)
+
+    return df
+
+
+def create_col_hash(
+    df: pd.DataFrame,
+    cols_to_hash: Tuple[pd.Series, ...],
+) -> pd.DataFrame:
+    """Create 16 character alphanumeric hash function using specified columns.
+
+    Parameters
+    ----------
+    df : Input dataframe.
+    cols_to_hash : Tuple of the columns you wish to hash, which are supplied as a sum of pandas series for some reason.
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe with extra 'bout_id' column.
+    """
+    df['property_id'] = (
+        cols_to_hash
+        .apply(lambda x: hashlib.md5(x.encode('utf-8')).hexdigest())
+    )
+
+    return df
 
 
 def replace_multiple(
@@ -68,6 +126,30 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def add_basic_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Add the raw columns needed to the data, set dtype where needed.
+
+    Parameters
+    ----------
+    df : Input property data, received after merge.
+
+    Returns
+    -------
+    pd.DataFrame
+        Data but with the basic columns added on. Can you tell I didn't know what the basic columns would be yet when I
+        wrote this?
+    """
+    df['has_price_data'] = np.where(df['price_paid'].notnull(), 1, 0)
+
+    df[['postcode', 'paon', 'street']] = df[['postcode', 'paon', 'street']].fillna('')  # we hash these so need no null
+    df = create_col_hash(df=df, cols_to_hash=(df.postcode + df.paon + df.street))
+
+    df['deed_date'] = pd.to_datetime(df['deed_date'], format='%Y-%m-%d')
+    df['year'] = df['deed_date'].dt.to_period('Y')  # to join on later
+
+    return df
+
+
 def engineering_main() -> None:
     """Run the engineering pipeline end to end, saving output to csv (how do I typehint a csv output?).
 
@@ -82,8 +164,12 @@ def engineering_main() -> None:
 
     prices = pd.read_csv('data/monmouthshire_prices.csv')  # the second 'p'
 
-    full_df = prices.merge(postcodes, on='postcode', how='outer')
-    full_df['has_price_data'] = np.where(full_df['price_paid'].notnull(), 1, 0)
+    full_df = prices.merge(postcodes, on='postcode', how='left')
+    full_df = add_basic_columns(full_df)
+
+    interpolated_yearly_value = interpolate_price_paid(full_df)
+    # forecast data forwards and backwards such that interpolated_yearly_value runs from 1995 - 2021 for all properties
+    full_df = full_df.merge(interpolated_yearly_value, on=['year', 'property_id'], how='outer')
 
     full_df.to_csv('data/monmouthshire_properties.csv', index=False)  # the third 'p'
 
