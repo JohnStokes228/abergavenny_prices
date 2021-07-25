@@ -1,11 +1,17 @@
 """
 Joining datasets together to form a single csv. Doing additional feature engineering where necessary to prep for the
 analysis.
+these include:
+    - joining price and location data to form a single dataset.
+    - creating a unique property ID based on postcode, house number and road name.
+    - interpolating the probable value of the property in years between sales.
+    - *extracting a bunch of extra info from some columns*
+
+*text* = not yet but will do soon lol.
 """
 import re
 import hashlib
 import pandas as pd
-import numpy as np
 from typing import Dict, Tuple
 
 
@@ -31,8 +37,8 @@ def interpolate_price_paid(df: pd.DataFrame) -> pd.DataFrame:
     df = df[['property_id', 'deed_date', 'price_paid']]
     df.set_index('deed_date', inplace=True)
 
-    df = df.groupby('property_id').resample('Y').mean()
-    df['price_paid'] = df['price_paid'].interpolate()
+    df = df.groupby('property_id').resample('Y').mean()  # row per id per year between earliest and latest year for id
+    df['price_paid'] = df['price_paid'].interpolate()  # linear - is this the best spline to fit?
 
     df.reset_index(inplace=True)
     df['year'] = df['deed_date'].dt.to_period('Y')
@@ -107,12 +113,12 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
 
     Parameters
     ----------
-    df : Input dataframe to have its column headers cleaned.
+    df : Input dataframe hoping to have its column headers cleaned.
 
     Returns
     -------
     pd.DataFrame
-        Input dataframe but with column headers cleaned.
+        Input dataframe but with column headers cleaned and subsequently, a satisfied smile.
     """
     replacements = {
         ' ': '_',
@@ -139,8 +145,6 @@ def add_basic_columns(df: pd.DataFrame) -> pd.DataFrame:
         Data but with the basic columns added on. Can you tell I didn't know what the basic columns would be yet when I
         wrote this?
     """
-    df['has_price_data'] = np.where(df['price_paid'].notnull(), 1, 0)
-
     df[['postcode', 'paon', 'street']] = df[['postcode', 'paon', 'street']].fillna('')  # we hash these so need no null
     df = create_col_hash(df=df, cols_to_hash=(df.postcode + df.paon + df.street))
 
@@ -157,7 +161,8 @@ def engineering_main() -> None:
     -----
     We clearly don't get price data for anywhere near the amount of properties we have postcodes for. It remains to be
     seen what impact this might have on the analysis.
-    P.S. I've no idea what the comments about the three p's are, chalk them up to heat stroke I guess.
+    P.S. I've no idea what the comments about the three p's are, chalk them up to heat stroke I guess it hit 30 degrees
+    today.
     """
     postcodes = pd.read_csv('data/monmouthshire_postcodes.csv')  # the first 'p'
     postcodes = clean_column_names(df=postcodes)
@@ -168,7 +173,6 @@ def engineering_main() -> None:
     full_df = add_basic_columns(full_df)
 
     interpolated_yearly_value = interpolate_price_paid(full_df)
-    # forecast data forwards and backwards such that interpolated_yearly_value runs from 1995 - 2021 for all properties
     full_df = full_df.merge(interpolated_yearly_value, on=['year', 'property_id'], how='outer')
 
     full_df.to_csv('data/monmouthshire_properties.csv', index=False)  # the third 'p'
