@@ -8,10 +8,14 @@ these include:
     - *extracting a bunch of extra info from some columns*
 
 *text* = not yet but will do soon lol.
+
+TODO: - fix the interpolation join so it still gets all the extra info
+      - add extra data such as distance to nearest services / from centroids / etc...
 """
 import re
 import hashlib
 import pandas as pd
+import numpy as np
 from typing import Dict, Tuple
 
 
@@ -132,6 +136,63 @@ def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def get_postcode_columns(
+    df: pd.DataFrame,
+    postcode_col: str = 'postcode',
+) -> pd.DataFrame:
+    """Transform an input postcode column into each level of grit in the postcode. Also adds postcode level long / lat.
+
+    Parameters
+    ----------
+    df : Input dataframe containing a postcode column.
+    postcode_col : Name of the column containing postcode info.
+
+    Returns
+    -------
+    pd.DataFrame
+        Input dataframe with postcode columns added.
+    """
+    df['postcode_area'] = df[postcode_col].str.extract(r'([a-zA-Z ]*)\d*.*')  # i.e. 'CF'
+    df['postcode_area_latitude'] = df.groupby('postcode_area')['latitude'].transform('sum')
+    df['postcode_area_longitude'] = df.groupby('postcode_area')['longitude'].transform('sum')
+
+    df['postcode_district'] = df[postcode_col].str.split().str[0]  # i.e. 'CF14'
+    df['postcode_district_latitude'] = df.groupby('postcode_district')['latitude'].transform('sum')
+    df['postcode_district_longitude'] = df.groupby('postcode_district')['longitude'].transform('sum')
+
+    df['postcode_sector'] = df[postcode_col].str[:-2]  # i.e. 'CF14 9'
+    df['postcode_sector_latitude'] = df.groupby('postcode_sector')['latitude'].transform('sum')
+    df['postcode_sector_longitude'] = df.groupby('postcode_sector')['longitude'].transform('sum')
+
+    return df
+
+
+def get_property_type(df: pd.DataFrame) -> pd.DataFrame:
+    """Extract property type from the 'paon' and 'saon' columns. wonder what 'paon' and 'saon' even mean...
+
+    Parameters
+    ----------
+    df : Input dataframe with a 'paon' and a 'saon' column to extract from.
+
+    Returns
+    -------
+    pd.DataFrame
+        Input dataframe with a new 'building_type' column.
+    """
+    rules = [df['paon'].str.contains('BARN', na=False),
+             df['paon'].str.contains('FARM', na=False),
+             df['paon'].str.contains('LAND AT', na=False),
+             df['paon'].str.contains('BUNGALOW', na=False),
+             df['paon'].str.contains('HOTEL', na=False),
+             df['paon'].str.contains(' ARMS', na=False),
+             df['saon'].str.contains('FLAT', na=False)]
+    values = ['Farm', 'Farm', 'Land only', 'Bungalow', 'Hotel', 'Pub', 'Flat']
+
+    df['building_type'] = np.select(rules, values, default='House')  # assume all else is residences
+
+    return df
+
+
 def add_basic_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Add the raw columns needed to the data, set dtype where needed.
 
@@ -149,7 +210,10 @@ def add_basic_columns(df: pd.DataFrame) -> pd.DataFrame:
     df = create_col_hash(df=df, cols_to_hash=(df.postcode + df.paon + df.street))
 
     df['deed_date'] = pd.to_datetime(df['deed_date'], format='%Y-%m-%d')
-    df['year'] = df['deed_date'].dt.to_period('Y')  # to join on later
+    df['year'] = df['deed_date'].dt.to_period('Y')  # to join interpolated data on later
+
+    df = get_postcode_columns(df)
+    df = get_property_type(df)
 
     return df
 
