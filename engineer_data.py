@@ -9,14 +9,14 @@ these include:
 
 *text* = not yet but will do soon lol.
 
-TODO: - fix the interpolation join so it still gets all the extra info
-      - add extra data such as distance to nearest services / from centroids / etc...
+TODO: - add extra data such as distance to nearest services / from centroids / etc...
 """
 import re
 import hashlib
 import pandas as pd
 import numpy as np
 from typing import Dict, Tuple
+from functools import reduce
 
 
 def interpolate_price_paid(df: pd.DataFrame) -> pd.DataFrame:
@@ -193,6 +193,38 @@ def get_property_type(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def get_supermarket_stats(df: pd.DataFrame) -> pd.DataFrame:
+    """Read in and utilise the supermarket data from geolityx.
+
+    Parameters
+    ----------
+    df : Property data to be joined.
+
+    Returns
+    -------
+    pd.DataFrame
+        Input data but with supermarket info added on in a few ways.
+    """
+    supermarket_df = pd.read_csv('data/geolityx_supermarkets_locations.csv')
+
+    supermarket_df['postcode_area'] = supermarket_df['postcode'].str.extract(r'([a-zA-Z ]*)\d*.*')  # i.e. 'CF'
+    supermarket_df['postcode_district'] = supermarket_df['postcode'].str.split().str[0]  # i.e. 'CF14'
+    supermarket_df['postcode_sector'] = supermarket_df['postcode'].str[:-2]  # i.e. 'CF14 9'
+
+    supermarket_df['supermarkets_in_area'] = supermarket_df.groupby('postcode_area')['id'].transform('count')
+    supermarket_df['supermarkets_in_district'] = supermarket_df.groupby('postcode_district')['id'].transform('count')
+    supermarket_df['supermarkets_in_sector'] = supermarket_df.groupby('postcode_sector')['id'].transform('count')
+
+    counts_list = [df,
+                   supermarket_df[['postcode_area', 'supermarkets_in_area']].drop_duplicates(),
+                   supermarket_df[['postcode_district', 'supermarkets_in_district']].drop_duplicates(),
+                   supermarket_df[['postcode_sector', 'supermarkets_in_sector']].drop_duplicates()]
+
+    df = reduce(lambda left, right: pd.merge(left, right, how='left'), counts_list)
+
+    return df
+
+
 def add_basic_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Add the raw columns needed to the data, set dtype where needed.
 
@@ -246,6 +278,8 @@ def engineering_main() -> None:
     full_df = full_df.merge(interpolated_yearly_value, on=['property_id'], how='outer')
     full_df = full_df.merge(true_years, on=['year', 'property_id'], how='left')
     full_df['true_price'] = full_df['true_price'].fillna(0)
+
+    full_df = get_supermarket_stats(full_df)
 
     full_df.to_csv('data/monmouthshire_properties.csv', index=False)  # the third 'p'
 
