@@ -237,7 +237,15 @@ def engineering_main() -> None:
     full_df = add_basic_columns(full_df)
 
     interpolated_yearly_value = interpolate_price_paid(full_df)
-    full_df = full_df.merge(interpolated_yearly_value, on=['year', 'property_id'], how='outer')
+
+    true_years = full_df[['year', 'property_id']]
+    true_years['true_price'] = 1
+    full_df.drop(['price_paid', 'year', 'unique_id', 'deed_date'], inplace=True, axis=1)
+    full_df = full_df.drop_duplicates(subset='property_id', keep='last')
+
+    full_df = full_df.merge(interpolated_yearly_value, on=['property_id'], how='outer')
+    full_df = full_df.merge(true_years, on=['year', 'property_id'], how='left')
+    full_df['true_price'] = full_df['true_price'].fillna(0)
 
     full_df.to_csv('data/monmouthshire_properties.csv', index=False)  # the third 'p'
 

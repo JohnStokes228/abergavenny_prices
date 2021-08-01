@@ -17,8 +17,6 @@ import plotly.express as px
 
 
 df = pd.read_csv('data/monmouthshire_properties.csv')
-df['deed_date'] = pd.to_datetime(df['deed_date'], format='%Y-%m-%d')
-df['year'] = df['deed_date'].dt.year
 
 app = dash.Dash(__name__)
 app.layout = html.Div([
@@ -91,6 +89,7 @@ def update_scatter_plot(
     """
     df_to_plot = df[df['town'].isin(properties_to_plot)]
     df_to_plot = df_to_plot[(df_to_plot['year'] >= date_range[0]) & (df_to_plot['year'] <= date_range[1])]
+    df_to_plot = df_to_plot[df_to_plot['true_price'] == 1]
 
     fig = px.scatter(
         data_frame=df_to_plot,
