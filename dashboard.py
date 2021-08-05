@@ -3,9 +3,13 @@ Visualisation dashboard, to play with the data. Will gradually update this as ne
 for obvious reasons...
 
 TODO:
-    - add some basic data exploration graphs i.e. null values, etc...
-    - add a year slider to properties map
+    - add some basic data exploration graphs i.e.:
+        - Null count heatmap? <- filter by region prehaps to keep it legible?
+        - group ranges as violin plots?
+        - number of unique values in some columns?
+        - value counts as divided bars for certain columns?
     - consider further analysis that might be chill
+    - build as a multi page app with different themes and shit <- this is the big next step I think
 """
 import pandas as pd
 from typing import List

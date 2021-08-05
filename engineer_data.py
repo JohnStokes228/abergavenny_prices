@@ -5,11 +5,12 @@ these include:
     - joining price and location data to form a single dataset.
     - creating a unique property ID based on postcode, house number and road name.
     - interpolating the probable value of the property in years between sales.
+    - adding info on distance to and brand of closest supermarket.
     - *extracting a bunch of extra info from some columns*
 
 *text* = not yet but will do soon lol.
 
-TODO: - add extra data such as distance to nearest services / from centroids / etc...
+TODO: - add extra data such as distance from centroids / etc...
 """
 import re
 import hashlib
@@ -17,6 +18,7 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Tuple
 from functools import reduce
+from scipy.spatial.distance import cdist
 
 
 def interpolate_price_paid(df: pd.DataFrame) -> pd.DataFrame:
@@ -194,7 +196,9 @@ def get_property_type(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_supermarket_stats(df: pd.DataFrame) -> pd.DataFrame:
-    """Read in and utilise the supermarket data from geolityx.
+    """Read in and utilise the supermarket data from geolityx in some kind of nonspecific but deffo impressive way
+    (trust me yeah). Quite possibly the ugliest function I've written in a while but ack well it does its thing I
+    guess...
 
     Parameters
     ----------
@@ -203,9 +207,11 @@ def get_supermarket_stats(df: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     pd.DataFrame
-        Input data but with supermarket info added on in a few ways.
+        Input data but with supermarket info added on in a few ways. Don't ask what ways though. Can you tell I wrote
+        the docstring before the function. Because I didn't. just lazy.
     """
     supermarket_df = pd.read_csv('data/geolityx_supermarkets_locations.csv')
+    supermarket_df = supermarket_df[supermarket_df['county'].isin(['Gwent', 'Powys'])]
 
     supermarket_df['postcode_area'] = supermarket_df['postcode'].str.extract(r'([a-zA-Z ]*)\d*.*')  # i.e. 'CF'
     supermarket_df['postcode_district'] = supermarket_df['postcode'].str.split().str[0]  # i.e. 'CF14'
@@ -215,10 +221,19 @@ def get_supermarket_stats(df: pd.DataFrame) -> pd.DataFrame:
     supermarket_df['supermarkets_in_district'] = supermarket_df.groupby('postcode_district')['id'].transform('count')
     supermarket_df['supermarkets_in_sector'] = supermarket_df.groupby('postcode_sector')['id'].transform('count')
 
+    dist_df = cdist(df[['latitude', 'longitude']], supermarket_df[['lat_wgs', 'long_wgs']], metric='euclidean')
+    dist_df = pd.DataFrame(dist_df, index=df['property_id'], columns=supermarket_df['fascia'])
+    closest_dist = pd.DataFrame(dist_df.min(axis=1)).reset_index().drop_duplicates()  # distance to closest
+    closest_dist.columns = ['property_id', 'distance_to_closest_supermarket']
+    closest_store = pd.DataFrame(dist_df.idxmin(axis=1)).reset_index().drop_duplicates()  # name of closest
+    closest_store.columns = ['property_id', 'closest_store']
+
     counts_list = [df,
                    supermarket_df[['postcode_area', 'supermarkets_in_area']].drop_duplicates(),
                    supermarket_df[['postcode_district', 'supermarkets_in_district']].drop_duplicates(),
-                   supermarket_df[['postcode_sector', 'supermarkets_in_sector']].drop_duplicates()]
+                   supermarket_df[['postcode_sector', 'supermarkets_in_sector']].drop_duplicates(),
+                   closest_dist,
+                   closest_store]
 
     df = reduce(lambda left, right: pd.merge(left, right, how='left'), counts_list)
 
