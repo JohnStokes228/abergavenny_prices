@@ -227,13 +227,17 @@ def get_supermarket_stats(df: pd.DataFrame) -> pd.DataFrame:
     closest_dist.columns = ['property_id', 'distance_to_closest_supermarket']
     closest_store = pd.DataFrame(dist_df.idxmin(axis=1)).reset_index().drop_duplicates()  # name of closest
     closest_store.columns = ['property_id', 'closest_store']
+    stores_in_radius = dist_df < 0.1  # defines a radius to check for stores in - no idea how big in km terms
+    stores_in_radius = pd.DataFrame(stores_in_radius.sum(axis=1)).reset_index().drop_duplicates()
+    stores_in_radius.columns = ['property_id', 'number_stores_in_radius']
 
     counts_list = [df,
                    supermarket_df[['postcode_area', 'supermarkets_in_area']].drop_duplicates(),
                    supermarket_df[['postcode_district', 'supermarkets_in_district']].drop_duplicates(),
                    supermarket_df[['postcode_sector', 'supermarkets_in_sector']].drop_duplicates(),
                    closest_dist,
-                   closest_store]
+                   closest_store,
+                   stores_in_radius]
 
     df = reduce(lambda left, right: pd.merge(left, right, how='left'), counts_list)
 
