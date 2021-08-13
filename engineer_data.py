@@ -155,16 +155,16 @@ def get_postcode_columns(
         Input dataframe with postcode columns added.
     """
     df['postcode_area'] = df[postcode_col].str.extract(r'([a-zA-Z ]*)\d*.*')  # i.e. 'CF'
-    df['postcode_area_latitude'] = df.groupby('postcode_area')['latitude'].transform('sum')
-    df['postcode_area_longitude'] = df.groupby('postcode_area')['longitude'].transform('sum')
+    df['postcode_area_latitude'] = df.groupby('postcode_area')['latitude'].transform('mean')
+    df['postcode_area_longitude'] = df.groupby('postcode_area')['longitude'].transform('mean')
 
     df['postcode_district'] = df[postcode_col].str.split().str[0]  # i.e. 'CF14'
-    df['postcode_district_latitude'] = df.groupby('postcode_district')['latitude'].transform('sum')
-    df['postcode_district_longitude'] = df.groupby('postcode_district')['longitude'].transform('sum')
+    df['postcode_district_latitude'] = df.groupby('postcode_district')['latitude'].transform('mean')
+    df['postcode_district_longitude'] = df.groupby('postcode_district')['longitude'].transform('mean')
 
     df['postcode_sector'] = df[postcode_col].str[:-2]  # i.e. 'CF14 9'
-    df['postcode_sector_latitude'] = df.groupby('postcode_sector')['latitude'].transform('sum')
-    df['postcode_sector_longitude'] = df.groupby('postcode_sector')['longitude'].transform('sum')
+    df['postcode_sector_latitude'] = df.groupby('postcode_sector')['latitude'].transform('mean')
+    df['postcode_sector_longitude'] = df.groupby('postcode_sector')['longitude'].transform('mean')
 
     return df
 
@@ -217,9 +217,15 @@ def get_supermarket_stats(df: pd.DataFrame) -> pd.DataFrame:
     supermarket_df['postcode_district'] = supermarket_df['postcode'].str.split().str[0]  # i.e. 'CF14'
     supermarket_df['postcode_sector'] = supermarket_df['postcode'].str[:-2]  # i.e. 'CF14 9'
 
-    supermarket_df['supermarkets_in_area'] = supermarket_df.groupby('postcode_area')['id'].transform('count')
-    supermarket_df['supermarkets_in_district'] = supermarket_df.groupby('postcode_district')['id'].transform('count')
-    supermarket_df['supermarkets_in_sector'] = supermarket_df.groupby('postcode_sector')['id'].transform('count')
+    supermarket_df['supermarkets_in_area'] = supermarket_df.groupby('postcode_area')['id'].transform('count').fillna(0)
+    supermarket_df['supermarkets_in_district'] = (supermarket_df
+                                                  .groupby('postcode_district')['id']
+                                                  .transform('count')
+                                                  .fillna(0))
+    supermarket_df['supermarkets_in_sector'] = (supermarket_df
+                                                .groupby('postcode_sector')['id']
+                                                .transform('count')
+                                                .fillna(0))
 
     dist_df = cdist(df[['latitude', 'longitude']], supermarket_df[['lat_wgs', 'long_wgs']], metric='euclidean')
     dist_df = pd.DataFrame(dist_df, index=df['property_id'], columns=supermarket_df['fascia'])

@@ -4,10 +4,10 @@ for obvious reasons...
 
 TODO:
     - add some basic data exploration graphs i.e.:
-        - basic shape info on data
-        - Null count heatmap? <- filter by region prehaps to keep it legible?
+        - shape data needs updating
+        - column data needs updating - percent nulls and metadata columns
+        - Null count bar charts?
         - group ranges as violin plots?
-        - number of unique values in some columns?
         - value counts as divided bars for certain columns?
     - consider further analysis that might be chill
     - build as a multi page app with different themes and shit <- this is the big next step I think
@@ -29,9 +29,33 @@ app.layout = html.Div([
     html.H1("Monmouthshire Properties Analysis", style={'text-align': 'center'}),
 
     html.Div([
-        html.H2('1. Variable Types and Value Counts', style={'display': 'flex',
-                                                             'justifyContent': 'center',
-                                                             'align-items': 'center'}),
+        html.H2('0. File Shape Data and Variable Information', style={'display': 'flex',
+                                                                      'justifyContent': 'center',
+                                                                      'align-items': 'center'}),
+
+        html.Div([
+            dcc.Dropdown(id='choose_file',
+                         options=[{'label': 'monmouthshire_postcodes', 'value': 'monmouthshire_postcodes'},
+                                  {'label': 'monmouthshire_prices', 'value': 'monmouthshire_prices'},
+                                  {'label': 'geolytix_supermarkets_locations', 'value': 'geolytix_supermarkets_locations'},
+                                  {'label': 'constructed by Johnno', 'value': 'constructed by Johnno'},
+                                  {'label': 'Complete', 'value': 'Complete'}],
+                         value='Complete',
+                         multi=False)
+        ], style={'width': '20%', 'justifyContent': 'center', 'align-items': 'center'}),
+
+        html.Div([
+            dash_table.DataTable(id='file_shape',
+                                 fixed_rows={'headers': True},
+                                 style_table={'height': '300px', 'overflowY': 'auto'},
+                                 style_cell={'minWidth': 100, 'maxWidth': 1000},
+                                 fill_width=False
+                                 )
+        ], style={'display': 'flex', 'justifyContent': 'center', 'align-items': 'center'})
+    ]),
+
+    html.Div([
+        html.H3('0.1 Complete Dataset Used Column Info For Selected Source File'),
 
         html.Div([
                 dcc.Dropdown(id='sort_by',
@@ -95,16 +119,45 @@ app.layout = html.Div([
 
 
 @app.callback(
+    [Output(component_id='file_shape', component_property='data'),
+     Output(component_id='file_shape', component_property='columns')],
+    Input(component_id='choose_file', component_property='value')
+)
+def get_file_shape_table(chosen_file: str) -> Tuple[Dict[str, str], List[Dict[str, str]]]:
+    """Choose which file to display the contents of in the shape table.
+
+    Parameters
+    ----------
+    chosen_file : Name of file to display shape data for
+
+    Returns
+    -------
+    Tuple[Dict[str, str], List[Dict[str, str]]]
+        Required outputs to fill the column headers and data content for the Dash table
+    """
+    shape_data = pd.read_csv('data/metadata/property_data_shape.csv')
+    shape_data = shape_data[shape_data['File Name'] == chosen_file]
+    shape_data.drop('File Name', inplace=True, axis=1)
+
+    return shape_data.to_dict(orient='records'), [{'id': col, 'name': col} for col in shape_data.columns]
+
+
+@app.callback(
     [Output(component_id='variable_info', component_property='data'),
      Output(component_id='variable_info', component_property='columns')],
-    Input(component_id='sort_by', component_property='value')
+    [Input(component_id='sort_by', component_property='value'),
+     Input(component_id='choose_file', component_property='value')]
 )
-def get_variable_info_table(sort_by: str) -> Tuple[Dict[str, str], List[Dict[str, str]]]:
+def get_variable_info_table(
+    sort_by: str,
+    chosen_file: str,
+) -> Tuple[Dict[str, str], List[Dict[str, str]]]:
     """Generate the contents of the Dash data table displaying the shape info on the dataset.
 
     Parameters
     ----------
     sort_by : Column name to sort the data on.
+    chosen_file : Chosen File to display data for.
 
     Returns
     -------
@@ -112,16 +165,20 @@ def get_variable_info_table(sort_by: str) -> Tuple[Dict[str, str], List[Dict[str
         Required outputs to fill the column headers and data content for the Dash table
     """
     results = pd.DataFrame(df.dtypes).reset_index()
+    origins = pd.read_csv('data/metadata/file_of_origin.csv')
 
     results['Unique Values'] = [len(df[col].unique()) for col in df.columns]
     results['NULL Values'] = [df[col].isnull().sum() for col in df.columns]
     results['Sample Values'] = [', '.join(df[df[col].notnull()][col].unique()[:2].astype(str)) for col in df.columns]
-    results['Source File'] = 'stole it m8'  # fill this in for real at some point John its unprofessional
 
-    results.columns = ['Variable Name', 'Data Type', 'Unique Values', 'NULL Values',
-                       'Sample Values', 'Source File']
+    results.columns = ['Variable Name', 'Data Type', 'Unique Values', 'NULL Values', 'Sample Values']
     results['Data Type'] = results['Data Type'].astype(str)
     results['Sample Values'] = results['Sample Values'].str[:70]
+    results = results.merge(origins)
+
+    if chosen_file != 'Complete':
+        results = results[results['Source File'] == chosen_file]  # reduce the visible variables
+
     results.sort_values(by=sort_by, inplace=True)
 
     return results.to_dict(orient='records'), [{'id': col, 'name': col} for col in results.columns]

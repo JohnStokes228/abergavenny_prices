@@ -1,0 +1,31 @@
+Attribute,File Name,Value
+Source,monmouthshire_postcodes,https://www.doogal.co.uk/AdministrativeAreas.php?district=W06000021
+Row Count,monmouthshire_postcodes,6247
+Column Count,monmouthshire_postcodes,17
+Link Variables,monmouthshire_postcodes,Postcode
+Description,monmouthshire_postcodes,Locational data for postcodes in Monmouthshire county
+Additional Info,monmouthshire_postcodes,The low row count suggests this dataset is massively incomplete
+Source,monmouthshire_prices,https://landregistry.data.gov.uk/app/ppd/search
+Row Count,monmouthshire_prices,38275
+Column Count,monmouthshire_prices,16
+Link Variables,monmouthshire_prices,Postcode
+Description,monmouthshire_prices,historic dataset of prices paid for properties in Monmouthshire county since ~1995
+Additional Info,monmouthshire_prices,contains commercial transactions and land purchases as well as property.
+Source,geolytix_supermarkets_locations,https://geolytix.com/blog/geolytix-supermarket-retail-points-2/
+Row Count,geolytix_supermarkets_locations,17024
+Column Count,geolytix_supermarkets_locations,17
+Link Variables,geolytix_supermarkets_locations,Postcode and Longitude / Latitude are used to relate this data to properties
+Description,geolytix_supermarkets_locations,open dataset on the locations and types of chain supermarket brands across the UK
+Additional Info,geolytix_supermarkets_locations,"Only use the rows within Monmouthshire and Gwent, and the columns relating to postcode, long/lat and store brand"
+Source,constructed by Johnno,Johnnos code
+Row Count,constructed by Johnno,83640
+Column Count,constructed by Johnno,3
+Link Variables,constructed by Johnno,
+Description,constructed by Johnno,All columns who do not come from existing sources
+Additional Info,constructed by Johnno,Is there no end to his useless ideas why did he make these columns
+Source,Complete,Constructed by code in engineer_data.py
+Row Count,Complete,121915
+Column Count,Complete,49
+Link Variables,Complete,
+Description,Complete,Complete engineered dataset
+Additional Info,Complete,Price data is interpolated in this dataset to allow for a more complete timeseries.
