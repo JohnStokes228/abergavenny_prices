@@ -3,3 +3,4 @@ pandas==1.2.4
 plotly==4.14.3
 scipy==1.6.2
 shapely==1.6.4.post1
+geopandas==0.6.1

@@ -12,13 +12,15 @@ these include:
 
 TODO: - add extra data such as distance from centroids / etc...
 """
-import re
-import hashlib
 import pandas as pd
 import numpy as np
-from typing import Dict, Tuple
 from functools import reduce
 from scipy.spatial.distance import cdist
+from data_manipulation import (
+    create_col_hash,
+    clean_column_names,
+    convert_column_to_boolean,
+)
 
 
 def interpolate_price_paid(df: pd.DataFrame) -> pd.DataFrame:
@@ -50,90 +52,6 @@ def interpolate_price_paid(df: pd.DataFrame) -> pd.DataFrame:
     df['year'] = df['deed_date'].dt.to_period('Y')
     df.drop('deed_date', inplace=True, axis=1)
     df.rename(columns={'price_paid': 'interpolated_price'}, inplace=True)
-
-    return df
-
-
-def create_col_hash(
-    df: pd.DataFrame,
-    cols_to_hash: Tuple[pd.Series, ...],
-) -> pd.DataFrame:
-    """Create 16 character alphanumeric hash function using specified columns.
-
-    Parameters
-    ----------
-    df : Input dataframe.
-    cols_to_hash : Tuple of the columns you wish to hash, which are supplied as a sum of pandas series for some reason.
-
-    Returns
-    -------
-    pd.DataFrame
-        Dataframe with extra 'bout_id' column.
-    """
-    df['property_id'] = (
-        cols_to_hash
-        .apply(lambda x: hashlib.md5(x.encode('utf-8')).hexdigest())
-    )
-
-    return df
-
-
-def replace_multiple(
-    text: str,
-    replacements: Dict[str, str],
-    simultaneous: bool = True,
-) -> str:
-    """Replaces multiple norty characters in a singe string.
-
-    Notes
-    -----
-    As dictionaries have no order in python, the user must choose whether to simultaneously replace in a single pass,
-    using regex, or run chained replacements, which could potentially affect the output. I doubt I'll use this feature
-    but it was cool to add in.
-
-    Parameters
-    ----------
-    text : Input text to be replaced upon.
-    replacements : dictionary of each current - replacement pair.
-    simultaneous : set True to replace everything in a single pass, or False to chain replacements in random order.
-
-    Returns
-    -------
-    str
-        Text but with the requested replacements made.
-    """
-    if simultaneous:
-        replacements = dict((re.escape(k), v) for k, v in replacements.items())
-        pattern = re.compile("|".join(replacements.keys()))
-        text = pattern.sub(lambda m: replacements[re.escape(m.group(0))], text)
-
-    else:
-        for i, j in replacements.items():
-            text = text.replace(i, j)
-
-    return text
-
-
-def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
-    """Clean column headers of capitals, punctuation, etc...
-
-    Parameters
-    ----------
-    df : Input dataframe hoping to have its column headers cleaned.
-
-    Returns
-    -------
-    pd.DataFrame
-        Input dataframe but with column headers cleaned and subsequently, a satisfied smile.
-    """
-    replacements = {
-        ' ': '_',
-        '?': '',
-    }
-    df.columns = [replace_multiple(text=col.lower(),
-                                   replacements=replacements,
-                                   simultaneous=True)
-                  for col in df.columns]
 
     return df
 
@@ -217,15 +135,21 @@ def get_supermarket_stats(df: pd.DataFrame) -> pd.DataFrame:
     supermarket_df['postcode_district'] = supermarket_df['postcode'].str.split().str[0]  # i.e. 'CF14'
     supermarket_df['postcode_sector'] = supermarket_df['postcode'].str[:-2]  # i.e. 'CF14 9'
 
-    supermarket_df['supermarkets_in_area'] = supermarket_df.groupby('postcode_area')['id'].transform('count').fillna(0)
+    supermarket_df['supermarkets_in_area'] = (supermarket_df
+                                              .groupby('postcode_area')['id']
+                                              .transform('count')
+                                              .fillna(0)
+                                              .astype(int))
     supermarket_df['supermarkets_in_district'] = (supermarket_df
                                                   .groupby('postcode_district')['id']
                                                   .transform('count')
-                                                  .fillna(0))
+                                                  .fillna(0)
+                                                  .astype(int))
     supermarket_df['supermarkets_in_sector'] = (supermarket_df
                                                 .groupby('postcode_sector')['id']
                                                 .transform('count')
-                                                .fillna(0))
+                                                .fillna(0)
+                                                .astype(int))
 
     dist_df = cdist(df[['latitude', 'longitude']], supermarket_df[['lat_wgs', 'long_wgs']], metric='euclidean')
     dist_df = pd.DataFrame(dist_df, index=df['property_id'], columns=supermarket_df['fascia'])
@@ -275,6 +199,29 @@ def add_basic_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def generate_shape_info(df: pd.DataFrame) -> None:
+    """Generate the shape info dataframe to be displayed in the dashboard
+
+    Parameters
+    ----------
+    df : Complete engineered dataframe.
+    """
+    results = pd.DataFrame(df.dtypes).reset_index()
+    origins = pd.read_csv('data/metadata/file_of_origin.csv')
+
+    results['Uniques'] = [len(df[col].unique()) for col in df.columns]
+    results['NULLs'] = [df[col].isnull().sum() for col in df.columns]
+    results['prop NULLS'] = [round(df[col].isnull().mean(), 2) for col in df.columns]
+    results['Sample Values'] = [', '.join(df[df[col].notnull()][col].unique()[:2].astype(str)) for col in df.columns]
+
+    results.columns = ['Variable Name', 'Data Type', 'Uniques', 'NULLs', 'proportion NULL', 'Sample Values']
+    results['Data Type'] = results['Data Type'].astype(str)
+    results['Sample Values'] = results['Sample Values'].str[:70]
+    results = results.merge(origins)
+
+    results.to_csv('data/metadata/variable_info.csv', index=False)
+
+
 def engineering_main() -> None:
     """Run the engineering pipeline end to end, saving output to csv (how do I typehint a csv output?).
 
@@ -296,17 +243,24 @@ def engineering_main() -> None:
     interpolated_yearly_value = interpolate_price_paid(full_df)
 
     true_years = full_df[['year', 'property_id']]
-    true_years['true_price'] = 1
+    true_years['true_price'] = True
     full_df.drop(['price_paid', 'year', 'unique_id', 'deed_date'], inplace=True, axis=1)
     full_df = full_df.drop_duplicates(subset='property_id', keep='last')
 
     full_df = full_df.merge(interpolated_yearly_value, on=['property_id'], how='outer')
     full_df = full_df.merge(true_years, on=['year', 'property_id'], how='left')
-    full_df['true_price'] = full_df['true_price'].fillna(0)
+    full_df['true_price'] = full_df['true_price'].fillna(False)
+
+    full_df['in_use'] = convert_column_to_boolean(full_df['in_use'], 'Yes')
+    full_df['new_build'] = convert_column_to_boolean(full_df['new_build'], 'Y')
+    full_df['introduced'] = pd.to_datetime(full_df['introduced'], format='%Y-%m-%d')
+    full_df['last_updated'] = pd.to_datetime(full_df['last_updated'], format='%Y-%m-%d')
+    full_df['terminated'] = pd.to_datetime(full_df['terminated'], format='%Y-%m-%d')
 
     full_df = get_supermarket_stats(full_df)
 
     full_df.to_csv('data/monmouthshire_properties.csv', index=False)  # the third 'p'
+    generate_shape_info(full_df)
 
 
 if __name__ == '__main__':

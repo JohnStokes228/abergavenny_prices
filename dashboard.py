@@ -4,10 +4,8 @@ for obvious reasons...
 
 TODO:
     - add some basic data exploration graphs i.e.:
-        - shape data needs updating
-        - column data needs updating - percent nulls and metadata columns
         - Null count bar charts?
-        - group ranges as violin plots?
+        - column ranges as violin plots?
         - value counts as divided bars for certain columns?
     - consider further analysis that might be chill
     - build as a multi page app with different themes and shit <- this is the big next step I think
@@ -152,7 +150,7 @@ def get_variable_info_table(
     sort_by: str,
     chosen_file: str,
 ) -> Tuple[Dict[str, str], List[Dict[str, str]]]:
-    """Generate the contents of the Dash data table displaying the shape info on the dataset.
+    """Read in and reduce the contents of the Dash data table displaying the shape info on the dataset.
 
     Parameters
     ----------
@@ -164,17 +162,7 @@ def get_variable_info_table(
     Tuple[Dict[str, str], List[Dict[str, str]]]
         Required outputs to fill the column headers and data content for the Dash table
     """
-    results = pd.DataFrame(df.dtypes).reset_index()
-    origins = pd.read_csv('data/metadata/file_of_origin.csv')
-
-    results['Unique Values'] = [len(df[col].unique()) for col in df.columns]
-    results['NULL Values'] = [df[col].isnull().sum() for col in df.columns]
-    results['Sample Values'] = [', '.join(df[df[col].notnull()][col].unique()[:2].astype(str)) for col in df.columns]
-
-    results.columns = ['Variable Name', 'Data Type', 'Unique Values', 'NULL Values', 'Sample Values']
-    results['Data Type'] = results['Data Type'].astype(str)
-    results['Sample Values'] = results['Sample Values'].str[:70]
-    results = results.merge(origins)
+    results = pd.read_csv('data/metadata/variable_info.csv')
 
     if chosen_file != 'Complete':
         results = results[results['Source File'] == chosen_file]  # reduce the visible variables
