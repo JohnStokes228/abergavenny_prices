@@ -4,7 +4,6 @@ for obvious reasons...
 
 TODO:
     - add some basic data exploration graphs i.e.:
-        - Null count bar charts?
         - column ranges as violin plots?
         - value counts as divided bars for certain columns?
     - consider further analysis that might be chill
@@ -29,7 +28,7 @@ app.layout = html.Div([
     html.H1("0 - Validation", style={'text-align': 'center'}),
 
     html.Div([
-        html.H2("Select File to Validate:\t\t\t\t             ", style={'display': 'inline-block'}),
+        html.H2("Select File to Validate: ", style={'display': 'inline-block'}),
 
 
         html.Div([
@@ -263,6 +262,7 @@ def update_null_heatmap(chosen_file: str) -> px.imshow:
         variables = variables['Variable Name'].tolist()
 
     df_to_plot = df[variables].isnull()
+    df_to_plot = df_to_plot.loc[(df_to_plot != 0).any(1), (df_to_plot != 0).any(0)]
 
     fig = px.imshow(df_to_plot,
                     labels=dict(x="Column Names", y="Row IDs"),
