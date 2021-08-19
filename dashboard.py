@@ -26,10 +26,11 @@ app = dash.Dash(__name__)
 app.layout = html.Div([
     html.H1("Monmouthshire Properties Analysis", style={'text-align': 'center'}),
 
+    html.H1("0 - Validation", style={'text-align': 'center'}),
+
     html.Div([
-        html.H2('0. File Shape Data and Variable Information', style={'display': 'flex',
-                                                                      'justifyContent': 'center',
-                                                                      'align-items': 'center'}),
+        html.H2("Select File to Validate:\t\t\t\t             ", style={'display': 'inline-block'}),
+
 
         html.Div([
             dcc.Dropdown(id='choose_file',
@@ -40,7 +41,11 @@ app.layout = html.Div([
                                   {'label': 'Complete', 'value': 'Complete'}],
                          value='Complete',
                          multi=False)
-        ], style={'width': '20%', 'justifyContent': 'center', 'align-items': 'center'}),
+        ], style={'width': '20%', 'display': 'inline-block', 'justifyContent': 'center', 'align-items': 'center'}),
+    ], style={'display': 'flex', 'justifyContent': 'center', 'align-items': 'center'}),
+
+    html.Div([
+        html.H2('0.1 File Shape Info'),
 
         html.Div([
             dash_table.DataTable(id='file_shape',
@@ -53,14 +58,14 @@ app.layout = html.Div([
     ]),
 
     html.Div([
-        html.H3('0.1 Complete Dataset Used Column Info For Selected Source File'),
+        html.H3('0.2 Column info for Selected File'),
 
         html.Div([
                 dcc.Dropdown(id='sort_by',
                              options=[{'label': 'Variable Name', 'value': 'Variable Name'},
                                       {'label': 'Data Type', 'value': 'Data Type'},
-                                      {'label': 'Unique Values', 'value': 'Unique Values'},
-                                      {'label': 'NULL Values', 'value': 'NULL Values'},
+                                      {'label': 'Uniques', 'value': 'Uniques'},
+                                      {'label': 'NULLs', 'value': 'NULLs'},
                                       {'label': 'Source File', 'value': 'Source File'}],
                              value=['Variable Name'],
                              multi=True)
@@ -72,13 +77,29 @@ app.layout = html.Div([
                                  style_table={'height': '300px', 'overflowY': 'auto'},
                                  style_cell={'minWidth': 100}
                                  )
-        ])
+        ], style={'display': 'flex', 'justifyContent': 'center', 'align-items': 'center'})
     ]),
 
     html.Div([
-        html.H2('2. Locations of Sold Properties', style={'display': 'flex',
-                                                          'justifyContent': 'center',
-                                                          'align-items': 'center'}),
+        html.H2('0.3 NULL Value Visualisations'),
+
+        dcc.Graph(id='null_bars',
+                  figure={},
+                  style={'display': 'inline-block',
+                         'width': '50%',
+                         'height': '200%'}),
+
+        dcc.Graph(id='null_heatmap',
+                  figure={},
+                  style={'display': 'inline-block',
+                         'width': '40%',
+                         'height': '200%'})
+    ]),
+
+    html.Div([
+        html.H2('1.1 Locations of Sold Properties', style={'display': 'flex',
+                                                           'justifyContent': 'center',
+                                                           'align-items': 'center'}),
 
         html.Div([
             dcc.Checklist(id='properties_to_plot',
@@ -171,6 +192,83 @@ def get_variable_info_table(
 
     return results.to_dict(orient='records'), [{'id': col, 'name': col} for col in results.columns]
 
+
+@app.callback(
+    Output(component_id='null_bars', component_property='figure'),
+    Input(component_id='choose_file', component_property='value')
+)
+def update_null_bar_chart(chosen_file: str) -> px.bar:
+    """Display NULL values counts across selected columns as a bar chart.
+
+    Notes
+    -----
+    Usually you'd use like a heatmap or something for this purpose but I think 120k rows is just too many for that to
+    really be legible unfortunately. In lieu of there being an obvious way for the user to filter that down I'm instead
+    for now opting for the prehaps rather odd bar chart you see below.
+
+    Parameters
+    ----------
+    chosen_file : The file name to display info for, or the value 'Complete' if the whole dataset is desired.
+
+    Returns
+    -------
+    px.bar
+        Bar chart displaying number of rows with each number of NULLs in.
+    """
+    variables = pd.read_csv('data/metadata/variable_info.csv')
+
+    if chosen_file != 'Complete':
+        variables = variables[variables['Source File'] == chosen_file]['Variable Name'].tolist()
+    else:
+        variables = variables['Variable Name'].tolist()
+
+    df_to_plot = pd.DataFrame(
+        df[variables]
+        .isnull()
+        .sum(axis=1)
+        .round(2)
+        .value_counts()
+    ).reset_index().sort_values(by='index')  # get number of NULL columns per row
+    df_to_plot.columns = ['Number of NULL Cells', 'Row Count']
+
+    fig = px.bar(df_to_plot,
+                 x='Number of NULL Cells',
+                 y='Row Count',
+                 title='0.3.1 Number of NULLs Per Row for Selected File Bar Chart')
+
+    return fig
+
+
+@app.callback(
+    Output(component_id='null_heatmap', component_property='figure'),
+    Input(component_id='choose_file', component_property='value')
+)
+def update_null_heatmap(chosen_file: str) -> px.imshow:
+    """Update NULL value heatmap to display only the columns from the chosen file.
+
+    Parameters
+    ----------
+    chosen_file : Name of file to display info for.
+
+    Returns
+    -------
+    px.density_heatmap
+        Heatmap of NULL locations in given file.
+    """
+    variables = pd.read_csv('data/metadata/variable_info.csv')
+
+    if chosen_file != 'Complete':
+        variables = variables[variables['Source File'] == chosen_file]['Variable Name'].tolist()
+    else:
+        variables = variables['Variable Name'].tolist()
+
+    df_to_plot = df[variables].isnull()
+
+    fig = px.imshow(df_to_plot,
+                    labels=dict(x="Column Names", y="Row IDs"),
+                    title='0.3.2 Column NULL Map')
+
+    return fig
 
 @app.callback(
     Output(component_id='properties_scatter', component_property='figure'),

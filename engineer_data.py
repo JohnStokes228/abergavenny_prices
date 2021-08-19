@@ -210,8 +210,8 @@ def generate_shape_info(df: pd.DataFrame) -> None:
     origins = pd.read_csv('data/metadata/file_of_origin.csv')
 
     results['Uniques'] = [len(df[col].unique()) for col in df.columns]
-    results['NULLs'] = [df[col].isnull().sum() for col in df.columns]
-    results['prop NULLS'] = [round(df[col].isnull().mean(), 2) for col in df.columns]
+    results['NULLs'] = [df[col].isnull().sum(axis=0) for col in df.columns]
+    results['prop NULLS'] = [round(df[col].isnull().mean(axis=0), 2) for col in df.columns]
     results['Sample Values'] = [', '.join(df[df[col].notnull()][col].unique()[:2].astype(str)) for col in df.columns]
 
     results.columns = ['Variable Name', 'Data Type', 'Uniques', 'NULLs', 'proportion NULL', 'Sample Values']
