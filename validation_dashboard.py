@@ -18,7 +18,9 @@ import dash_core_components as dcc
 from dash.dependencies import Output, Input
 import plotly.express as px
 
-df = pd.read_csv('data/monmouthshire_properties.csv')
+DF = pd.read_csv('data/monmouthshire_properties.csv')
+VARIABLES = pd.read_csv('data/metadata/variable_info.csv')
+SHAPE = pd.read_csv('data/metadata/property_data_shape.csv')
 
 
 app = dash.Dash(__name__)
@@ -53,7 +55,7 @@ app.layout = html.Div([
                                  style_cell={'minWidth': 100, 'maxWidth': 1000},
                                  fill_width=False
                                  )
-        ], style={'display': 'flex', 'justifyContent': 'center', 'align-items': 'center'})
+        ], style={'display': 'flex', 'justifyContent': 'center', 'align-items': 'center'}),
     ]),
 
     html.Div([
@@ -67,14 +69,14 @@ app.layout = html.Div([
                                       {'label': 'NULLs', 'value': 'NULLs'},
                                       {'label': 'Source File', 'value': 'Source File'}],
                              value=['Variable Name'],
-                             multi=True)
+                             multi=True),
             ], style={'width': '50%', 'justifyContent': 'center', 'align-items': 'center'}),
 
         html.Div([
             dash_table.DataTable(id='variable_info',
                                  fixed_rows={'headers': True},
                                  style_table={'height': '300px', 'overflowY': 'auto'},
-                                 style_cell={'minWidth': 100}
+                                 style_cell={'minWidth': 100},
                                  )
         ], style={'display': 'flex', 'justifyContent': 'center', 'align-items': 'center'})
     ]),
@@ -93,45 +95,6 @@ app.layout = html.Div([
                   style={'display': 'inline-block',
                          'width': '40%',
                          'height': '200%'})
-    ]),
-
-    html.Div([
-        html.H2('1.1 Locations of Sold Properties', style={'display': 'flex',
-                                                           'justifyContent': 'center',
-                                                           'align-items': 'center'}),
-
-        html.Div([
-            dcc.Checklist(id='properties_to_plot',
-                          options=[{'label': 'Coleford', 'value': 'COLEFORD'},
-                                   {'label': 'Newport', 'value': 'NEWPORT'},
-                                   {'label': 'Usk', 'value': 'USK'},
-                                   {'label': 'Chepstow', 'value': 'CHEPSTOW'},
-                                   {'label': 'Monmouth', 'value': 'MONMOUTH'},
-                                   {'label': 'Caldicot', 'value': 'CALDICOT'},
-                                   {'label': 'Abergavenny', 'value': 'ABERGAVENNY'},
-                                   {'label': 'Crickhowell', 'value': 'CRICKHOWELL'}],
-                          value=['ABERGAVENNY'],
-                          style={'display': 'inline-block'},
-                          labelStyle={'display': 'block'}),
-
-            dcc.Graph(id='properties_scatter',
-                      figure={},
-                      style={'display': 'inline-block', 'width': '85%'})
-
-        ], style={'display': 'flex', 'justifyContent': 'center', 'align-items': 'center'}),
-
-        dcc.RangeSlider(id='date_range_for_price_data',
-                        min=1995,
-                        max=2021,
-                        step=1,
-                        value=[2010, 2020],
-                        marks={1995: {'label': '1995'},
-                               2000: {'label': '2000'},
-                               2005: {'label': '2005'},
-                               2010: {'label': '2010'},
-                               2015: {'label': '2015'},
-                               2020: {'label': '2020'}}),
-
     ]),
 ])
 
@@ -153,8 +116,7 @@ def get_file_shape_table(chosen_file: str) -> Tuple[Dict[str, str], List[Dict[st
     Tuple[Dict[str, str], List[Dict[str, str]]]
         Required outputs to fill the column headers and data content for the Dash table
     """
-    shape_data = pd.read_csv('data/metadata/property_data_shape.csv')
-    shape_data = shape_data[shape_data['File Name'] == chosen_file]
+    shape_data = SHAPE[SHAPE['File Name'] == chosen_file]
     shape_data.drop('File Name', inplace=True, axis=1)
 
     return shape_data.to_dict(orient='records'), [{'id': col, 'name': col} for col in shape_data.columns]
@@ -170,7 +132,7 @@ def get_variable_info_table(
     sort_by: str,
     chosen_file: str,
 ) -> Tuple[Dict[str, str], List[Dict[str, str]]]:
-    """Read in and reduce the contents of the Dash data table displaying the shape info on the dataset.
+    """Reduce the contents of the Dash data table displaying the shape info on the dataset.
 
     Parameters
     ----------
@@ -182,10 +144,10 @@ def get_variable_info_table(
     Tuple[Dict[str, str], List[Dict[str, str]]]
         Required outputs to fill the column headers and data content for the Dash table
     """
-    results = pd.read_csv('data/metadata/variable_info.csv')
-
     if chosen_file != 'Complete':
-        results = results[results['Source File'] == chosen_file]  # reduce the visible variables
+        results = VARIABLES[VARIABLES['Source File'] == chosen_file].copy()  # reduce the visible variables
+    else:
+        results = VARIABLES
 
     results.sort_values(by=sort_by, inplace=True)
 
@@ -214,15 +176,13 @@ def update_null_bar_chart(chosen_file: str) -> px.bar:
     px.bar
         Bar chart displaying number of rows with each number of NULLs in.
     """
-    variables = pd.read_csv('data/metadata/variable_info.csv')
-
     if chosen_file != 'Complete':
-        variables = variables[variables['Source File'] == chosen_file]['Variable Name'].tolist()
+        variables = VARIABLES[VARIABLES['Source File'] == chosen_file]['Variable Name'].tolist()
     else:
-        variables = variables['Variable Name'].tolist()
+        variables = VARIABLES['Variable Name'].tolist()
 
     df_to_plot = pd.DataFrame(
-        df[variables]
+        DF[variables]
         .isnull()
         .sum(axis=1)
         .round(2)
@@ -254,14 +214,12 @@ def update_null_heatmap(chosen_file: str) -> px.imshow:
     px.density_heatmap
         Heatmap of NULL locations in given file.
     """
-    variables = pd.read_csv('data/metadata/variable_info.csv')
-
     if chosen_file != 'Complete':
-        variables = variables[variables['Source File'] == chosen_file]['Variable Name'].tolist()
+        variables = VARIABLES[VARIABLES['Source File'] == chosen_file]['Variable Name'].tolist()
     else:
-        variables = variables['Variable Name'].tolist()
+        variables = VARIABLES['Variable Name'].tolist()
 
-    df_to_plot = df[variables].isnull()
+    df_to_plot = DF[variables].isnull()
     df_to_plot = df_to_plot.loc[(df_to_plot != 0).any(1), (df_to_plot != 0).any(0)]
 
     fig = px.imshow(df_to_plot,
@@ -270,40 +228,6 @@ def update_null_heatmap(chosen_file: str) -> px.imshow:
 
     return fig
 
-@app.callback(
-    Output(component_id='properties_scatter', component_property='figure'),
-    [Input(component_id='properties_to_plot', component_property='value'),
-     Input(component_id='date_range_for_price_data', component_property='value')]
-)
-def update_scatter_plot(
-    properties_to_plot: List[int],
-    date_range: List[int],
-) -> px.scatter:
-    """Choose which data to plot on the scatter axis.
-
-    Parameters
-    ----------
-    properties_to_plot : List of desired values from the 'town' column of the property dataset.
-    date_range : List of start and end date of desired date range
-
-    Returns
-    -------
-    px.scatter
-        Plotly graph containing the desired points in space
-    """
-    df_to_plot = df[df['town'].isin(properties_to_plot)]
-    df_to_plot = df_to_plot[(df_to_plot['year'] >= date_range[0]) & (df_to_plot['year'] <= date_range[1])]
-    df_to_plot = df_to_plot[df_to_plot['true_price'] == 1]
-
-    fig = px.scatter(
-        data_frame=df_to_plot,
-        x='longitude',
-        y='latitude',
-        color='town',
-    )
-
-    return fig
-
 
 if __name__ == '__main__':
-    app.run_server()
+    app.run_server(debug=False)
