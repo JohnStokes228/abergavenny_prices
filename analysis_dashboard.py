@@ -2,8 +2,7 @@
 Analysis dashboard, as youd expect from a file with the name of 'analysis_dashboard'. Will contain all raw
 analysis plots etc... but no weirdo models just yet.
 
-TODO: - add violins for categorical data
-      - add something amazing
+TODO: - add something amazing
       - bask in awe at the output from the prior step
       - legit though maybe a choropleth based on our constructed polygons or something? could be norty just sayin'
 """
